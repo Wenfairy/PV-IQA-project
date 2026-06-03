@@ -1,0 +1,35 @@
+# Core deep learning
+torch==2.11.0
+torchvision==0.26.0
+timm==1.0.27
+torchmetrics==1.9.0
+
+# Data and image processing
+numpy==2.2.6
+pandas==2.3.3
+pillow==12.2.0
+opencv-python-headless==4.13.0.92
+scikit-learn==1.7.2
+scipy==1.15.3
+safetensors==0.7.0
+tqdm==4.67.3
+
+# Export and deployment
+onnx==1.21.0
+onnxscript==0.7.0
+
+# Logging and visualization
+wandb==0.26.1
+matplotlib==3.10.8
+rich==15.0.0
+
+# Config, CLI, web demo
+PyYAML==6.0.3
+typer==0.25.1
+fastapi==0.136.1
+python-multipart==0.0.27
+uvicorn==0.46.0
+
+# Optional evaluation/helper dependency from the original project config
+evaluate==0.4.6
+huggingface-hub==1.14.0

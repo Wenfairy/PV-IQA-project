@@ -1,62 +1,156 @@
-# PV-IQA
+# PV-IQA 使用说明
 
-无监督掌静脉图像质量评估。
+PV-IQA 用于掌静脉 ROI 图像质量评估。项目流程：
 
-## 核心算法
-
-$$
-Q = 100 \times \text{minmax}\big(Q^P + \beta \cdot \text{WD} + \gamma \cdot Q^V\big)
-$$
-
-| 分量 | 来源 | 公式 |
-|------|------|------|
-| $Q^P$ | PGRG (Zou et al., 2023) | 类内余弦相似度均值 |
-| WD | SDD-FIQA (Ou et al., 2021) | 类内/类间 Wasserstein 距离 |
-| $Q^V$ | 像素级视觉质量 | Laplacian 方差 + RMS 对比度 + 曝光平衡 |
-
-## 训练
-
-```bash
-uv sync
-uv run python train.py
+```text
+训练识别模型 -> 提取 embedding -> 生成质量伪标签 -> 训练 IQA 模型 -> 图片质量打分
 ```
 
-全流程：`build_metadata → train_recognizer → export_features → generate_pseudo_labels → train_iqa → export_onnx`
+当前推荐使用的新权重：
 
-<details>
-<summary>关键配置</summary>
-
-| 参数 | 示例值 | 说明 |
-|------|--------|------|
-| `iqa_backbone` | `mobilenetv3_large_100` | IQA 回归模型 backbone |
-| `pseudo_beta` | `0.1` | WD 分量权重（0=禁用） |
-| `pseudo_gamma` | `1.0` | Q^V 视觉质量分量权重 |
-| `iqa_epochs` | `20` | IQA 训练轮数 |
-| `iqa_huber_delta` | `0.1` | Huber loss delta |
-| `iqa_rank_weight` | `0.3` | 排序损失权重 |
-
-修改 `src/pv_iqa/config.py` 调整参数。
-</details>
-
-## Web 演示
-
-```bash
-cd app && bun install && bun restart
+```text
+checkpoints\new_old_roi_c7c8c9_5_retrain\iqa\best.pt
 ```
 
-- 前端: `http://localhost:6006`
-- API: `http://localhost:6005`
-- 支持 Python/Rust CPU/Rust CUDA 三引擎切换
+## 1. 环境安装
 
-## 目录
+推荐使用 Conda：
 
-```
-checkpoints/<run>/iqa/   训练产物（best.pt / best.onnx / best.onnx.json）
-datasets/<dataset>/      掌静脉 ROI 数据
-src/pv_iqa/              算法实现（训练/推理/伪标签/评估）
-app/                     Bun + React 前端
-app/backend              FastAPI 后端
+```powershell
+conda create -n palm_iqa python=3.10 -y            #创建虚拟环境
+conda activate palm_iqa                            #激活虚拟环境
+cd D:\IQA\code\PV-IQA-project                      #调至项目目录
+pip install -r requirements.txt                    #安装项目所需软件包
 ```
 
-> [!NOTE]
-> 依赖 CUDA 环境进行训练。仅推理的 CPU 模式通过 `PV-IQA-rs` CLI 支持。
+如果需要 GPU，请根据目标机器 CUDA 版本安装对应的 PyTorch CUDA 包。
+
+## 2. 数据格式
+
+训练数据按身份/左右手分文件夹：
+
+```text
+dataset_root/
+├── ac_l/
+│   ├── 1.jpg
+│   └── 2.jpg
+├── ac_r/
+├── bhh_l/
+└── bhh_r/
+```
+默认左右手分开作为不同类别。
+
+## 3. 重新训练
+
+完整训练：
+
+```powershell
+conda activate palm_iqa
+cd D:\IQA\code\PV-IQA-project
+python train_project.py --data "D:\IQA\data_base_path\IQA\New_old_roi_c7c8c9_5_numeric_only" --name new_old_roi_c7c8c9_5_retrain --device auto
+```
+
+快速试跑：
+
+```powershell
+python train_project.py --data "D:\IQA\data_base_path\IQA\New_old_roi_c7c8c9_5_numeric_only" --name debug_run --recog-epochs 2 --iqa-epochs 2 --device auto
+```
+
+训练输出：
+
+```text
+checkpoints\<run_name>\recognizer\best.pt
+checkpoints\<run_name>\pseudo_labels\pseudo_labels.csv
+checkpoints\<run_name>\iqa\best.pt
+```
+
+最终用于质量打分的是：
+
+```text
+checkpoints\<run_name>\iqa\best.pt
+```
+
+## 4. 测试打分
+
+使用已有的权重给文件夹打分：
+
+```powershell
+conda activate palm_iqa
+cd D:\IQA\code\PV-IQA-project    #来到项目目录，激活环境
+python score_images.py --ckpt "checkpoints\new_old_roi_c7c8c9_5_retrain\iqa\best.pt" --input "D:\IQA\code\yinxintestdata\err_roi" --out "err_roi_scores_new_retrain.csv"
+``
+#"D:\IQA\code\yinxintestdata\err_roi"为想要测试的图片文件夹
+#"checkpoints\new_old_roi_c7c8c9_5_retrain\iqa\best.pt"为目前已经训练好的权重
+
+打分并按质量分重命名：
+
+```powershell
+python score_images.py --ckpt "checkpoints\new_old_roi_c7c8c9_5_retrain\iqa\best.pt" --input "D:\IQA\code\yinxintestdata\err_roi" --out "err_roi_scores_new_retrain.csv" --rename
+```
+
+
+单张图片：
+
+```powershell
+python score_images.py --ckpt "checkpoints\new_old_roi_c7c8c9_5_retrain\iqa\best.pt" --input "D:\IQA\code\yinxintestdata\err_roi\example.jpg" --out "one_image_score.csv"
+```
+
+## 5. 脚本参数
+
+训练脚本：
+
+```powershell
+python train_project.py --help
+```
+
+常用参数：
+
+```text
+--data             训练数据目录
+--name             实验名
+--device           auto / cuda / cpu
+--recog-epochs     识别模型训练轮数
+--iqa-epochs       质量模型训练轮数
+--skip-onnx        跳过 ONNX 导出
+```
+
+测试脚本：
+
+```powershell
+python score_images.py --help
+```
+
+常用参数：
+
+```text
+--ckpt       IQA 权重
+--input      图片或文件夹
+--out        输出 CSV
+--rename     按质量分重命名
+--digits     重命名保留小数位，默认 3
+```
+
+## 6. 常见问题
+
+### base 环境报错
+
+如果看到：
+
+```text
+TypeError: unsupported operand type(s) for |: 'type' and 'type'
+```
+
+说明 Python 版本太旧。切换环境：
+
+```powershell
+conda activate palm_iqa
+```
+
+### 训练很慢
+
+检查是否用上 GPU：
+
+```powershell
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
