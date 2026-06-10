@@ -70,6 +70,14 @@ checkpoints\<run_name>\iqa\best.pt
 checkpoints\<run_name>\iqa\best.pt
 ```
 
+只复用旧伪标签、重新训练 IQA 质量模型：
+
+```powershell
+python train_iqa_only.py --source-run new_old_roi_c7c8c9_5_retrain --name new_degrade_iqa_only --device auto
+```
+
+这个命令不会重新训练识别模型，也不会重新生成伪标签，适合比较新增退化类型对 IQA 模型的影响。
+
 ## 4. 测试打分
 
 使用已有的权重给文件夹打分：
@@ -130,6 +138,21 @@ python score_images.py --help
 --digits     重命名保留小数位，默认 3
 ```
 
+退化排序评估脚本：
+
+```powershell
+python evaluate_degradation_ranking.py --ckpt "checkpoints\new_old_roi_c7c8c9_5_retrain\iqa\best.pt" --input "D:\IQA\code\yinxintestdata\err_roi" --out "degradation_ranking_report.csv"
+```
+
+这个脚本在训练完成后运行，用来检查五大类退化的排序是否合理。主要看：
+
+```text
+rank_acc_mild_gt_severe：轻度退化分数是否高于重度退化
+margin_acc：轻度退化是否比重度退化至少高出 margin
+monotonic_acc_clean_gt_mild_gt_severe：原图 > 轻度退化 > 重度退化
+mean_gap_mild_minus_severe：轻度退化和重度退化的平均分差
+```
+
 ## 6. 常见问题
 
 ### base 环境报错
@@ -153,4 +176,3 @@ conda activate palm_iqa
 ```powershell
 python -c "import torch; print(torch.cuda.is_available())"
 ```
-
